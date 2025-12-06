@@ -2,14 +2,12 @@ services:
   - type: web
     name: quickchat-backend
     env: node
-    region: ohio  # or virginia
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: node server.js
+    region: virginia
+    rootDir: backend  # This tells Render to look in backend folder
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node server.js
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
     healthCheckPath: /api/health
     autoDeploy: true
