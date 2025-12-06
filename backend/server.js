@@ -34,6 +34,16 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static('uploads'));
+// Fix for Render.com health checks
+app.use((req, res, next) => {
+  if (req.url === '/health' || req.url === '/api/health') {
+    return res.status(200).json({ 
+      status: 'OK', 
+      timestamp: new Date() 
+    });
+  }
+  next();
+});
 
 // ======================
 // DATABASE CONNECTION
