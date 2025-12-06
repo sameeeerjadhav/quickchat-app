@@ -11,11 +11,51 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+
+// ======================
+// CORS CONFIGURATION
+// ======================
+// Line 17 - Update this:
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'https://quickchat-app-woad.vercel.app', // ← YOUR ACTUAL URL HERE
+  'https://*.vercel.app'
+].filter(Boolean);
+
+console.log('🌐 Allowed CORS origins:', allowedOrigins);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      // Handle wildcard subdomains
+      if (allowedOrigin.includes('*')) {
+        const regex = new RegExp(allowedOrigin.replace('*', '.*'));
+        return regex.test(origin);
+      }
+      return origin === allowedOrigin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+// Initialize Socket.io with CORS
 const io = socketIO(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true
-  }
+  cors: corsOptions,
+  transports: ['websocket', 'polling']
 });
 
 // Import routes
@@ -27,13 +67,11 @@ const friendRoutes = require('./routes/friendRoutes');
 // ======================
 // MIDDLEWARE
 // ======================
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static('uploads'));
+
 // Fix for Render.com health checks
 app.use((req, res, next) => {
   if (req.url === '/health' || req.url === '/api/health') {
@@ -329,7 +367,7 @@ app.get('/', (req, res) => {
       users: '/api/users',
       messages: '/api/messages',
       friends: '/api/friends',
-      socket: 'WebSocket available at ws://localhost:5000'
+      socket: 'WebSocket available'
     }
   });
 });
@@ -356,6 +394,15 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
+  
+  // Handle CORS errors
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'CORS error: Origin not allowed'
+    });
+  }
+  
   res.status(500).json({
     success: false,
     message: 'Server error',
@@ -371,11 +418,12 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   await connectDB();
   
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log('\n' + '='.repeat(50));
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`⚡ Socket.IO ready on ws://localhost:${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`⚡ Socket.IO ready on port ${PORT}`);
     console.log(`📊 Database: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}`);
+    console.log(`🌐 Allowed origins:`, allowedOrigins);
     console.log(`👥 Online users: ${onlineUsers.size}`);
     console.log('='.repeat(50));
   });
