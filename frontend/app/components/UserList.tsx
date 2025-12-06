@@ -31,7 +31,7 @@ export default function UserList({ users, currentUserId, selectedUser, onSelectU
       if (!token) return;
       
       // Fetch friends from API
-      const response = await fetch('http://localhost:5000/api/friends/friends', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/friends/friends`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
