@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FiLogOut, FiUser, FiMenu, FiChevronLeft, FiMessageSquare } from 'react-icons/fi';
-import { Users } from 'lucide-react';
+import { Users, Home, Search } from 'lucide-react';
 import { authAPI, userAPI, messageAPI } from '../../lib/api';
 import { User, Message } from '../../types';
 import UserList from '../components/UserList';
@@ -34,6 +34,7 @@ export default function ChatPage() {
   const [userTyping, setUserTyping] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chats' | 'friends'>('chats');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
@@ -636,11 +637,39 @@ export default function ChatPage() {
         </div>
         
         <div className="flex items-center gap-1 md:gap-2">
+          {/* MOBILE NAVIGATION BUTTONS - ALWAYS VISIBLE */}
+          {isMobile && !selectedUser && (
+            <>
+              <button
+                onClick={() => router.push('/')}
+                className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                title="Home"
+              >
+                <Home className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => router.push('/friends')}
+                className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                title="Friends"
+              >
+                <Users className="h-5 w-5" />
+              </button>
+            </>
+          )}
+          
+          {/* DESKTOP NAVIGATION */}
           {!isMobile && (
             <>
               <Link 
-                href="/friends"
+                href="/"
                 className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 hidden sm:block"
+                title="Home"
+              >
+                <Home className="h-5 w-5" />
+              </Link>
+              <Link 
+                href="/friends"
+                className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                 title="Friends"
               >
                 <Users className="h-5 w-5" />
@@ -649,16 +678,18 @@ export default function ChatPage() {
             </>
           )}
           
-          {/* Mobile Menu Toggle */}
+          {/* Mobile Menu Toggle - Only show when sidebar can be toggled */}
           {isMobile && !selectedUser && (
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+              title="Toggle sidebar"
             >
-              <FiMenu className="h-5 w-5" />
+              {isSidebarOpen ? <Search className="h-5 w-5" /> : <FiMenu className="h-5 w-5" />}
             </button>
           )}
           
+          {/* Logout Button */}
           <button
             onClick={handleLogout}
             className="text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -677,6 +708,34 @@ export default function ChatPage() {
             ref={sidebarRef}
             className={`${isMobile ? 'absolute inset-0 z-40 bg-white dark:bg-gray-900' : 'w-full md:w-1/3 lg:w-1/4'} border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col transition-all duration-300`}
           >
+            {/* Mobile Tabs - Only show on mobile when sidebar is open */}
+            {isMobile && (
+              <div className="flex border-b border-gray-200 dark:border-gray-800">
+                <button
+                  onClick={() => setActiveTab('chats')}
+                  className={`flex-1 py-3 text-center font-medium text-sm ${
+                    activeTab === 'chats'
+                      ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <FiMessageSquare className="h-4 w-4" />
+                    <span>Chats</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => router.push('/friends')}
+                  className="flex-1 py-3 text-center font-medium text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Users className="h-4 w-4" />
+                    <span>Friends</span>
+                  </div>
+                </button>
+              </div>
+            )}
+            
             <div className="p-3 border-b border-gray-200 dark:border-gray-800">
               <SearchBar onSearch={setSearchQuery} />
             </div>
@@ -700,6 +759,35 @@ export default function ChatPage() {
                 }}
               />
             </div>
+            
+            {/* Mobile Bottom Navigation - When sidebar is closed */}
+            {isMobile && !isSidebarOpen && (
+              <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-2">
+                <div className="flex justify-around">
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    <FiMessageSquare className="h-5 w-5" />
+                    <span className="text-xs mt-1">Chats</span>
+                  </button>
+                  <button
+                    onClick={() => router.push('/friends')}
+                    className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    <Users className="h-5 w-5" />
+                    <span className="text-xs mt-1">Friends</span>
+                  </button>
+                  <button
+                    onClick={() => router.push('/')}
+                    className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    <Home className="h-5 w-5" />
+                    <span className="text-xs mt-1">Home</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -822,6 +910,42 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+      
+      {/* Mobile Bottom Navigation - Always visible when not in chat */}
+      {isMobile && !selectedUser && !isSidebarOpen && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-2 z-50">
+          <div className="flex justify-around">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              <FiMessageSquare className="h-5 w-5" />
+              <span className="text-xs mt-1">Chats</span>
+            </button>
+            <button
+              onClick={() => router.push('/friends')}
+              className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              <Users className="h-5 w-5" />
+              <span className="text-xs mt-1">Friends</span>
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              <Home className="h-5 w-5" />
+              <span className="text-xs mt-1">Home</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex flex-col items-center p-2 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+            >
+              <FiLogOut className="h-5 w-5" />
+              <span className="text-xs mt-1">Logout</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
