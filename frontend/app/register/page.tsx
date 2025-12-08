@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authAPI } from '../../lib/api';
-import { UserPlus, Mail, Lock, Eye, EyeOff, User, ArrowLeft, MessageSquare } from 'lucide-react';
+import { UserPlus, Mail, Lock, Eye, EyeOff, User, ArrowLeft, MessageSquare, Check } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 
 export default function RegisterPage() {
@@ -19,6 +19,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -30,6 +31,11 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!agreedToTerms) {
+      setError('You must agree to the Terms of Service and Privacy Policy');
+      return;
+    }
     
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -198,22 +204,26 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Terms checkbox */}
-            <div className="flex items-start">
-              <div className="flex items-center h-4">
+            {/* Terms checkbox - FIXED VERSION */}
+            <div className="flex items-start space-x-3">
+              <div className="relative flex items-center">
                 <input
+                  id="terms-checkbox"
                   type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="peer h-5 w-5 sm:h-6 sm:w-6 appearance-none rounded-md border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 checked:border-blue-600 dark:checked:border-blue-500 checked:bg-blue-600 dark:checked:bg-blue-500 transition-all cursor-pointer"
                   required
-                  className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                 />
+                <Check className="absolute h-3 w-3 sm:h-4 sm:w-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 transition-opacity" />
               </div>
-              <label className="ml-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+              <label htmlFor="terms-checkbox" className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                 I agree to the{' '}
-                <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                   Terms of Service
                 </Link>{' '}
                 and{' '}
-                <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                   Privacy Policy
                 </Link>
               </label>
@@ -221,7 +231,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreedToTerms}
               className="w-full flex items-center justify-center py-2.5 sm:py-3 px-4 text-sm sm:text-base bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
               {loading ? (
