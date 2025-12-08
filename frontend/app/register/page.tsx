@@ -114,7 +114,7 @@ export default function RegisterPage() {
                   value={formData.name}
                   onChange={handleChange}
                   className="w-full pl-10 pr-3 sm:pl-10 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition dark:text-white"
-                  placeholder="John Doe"
+                  placeholder="Enter your name"
                 />
               </div>
             </div>
@@ -134,7 +134,7 @@ export default function RegisterPage() {
                   value={formData.email}
                   onChange={handleChange}
                   className="w-full pl-10 pr-3 sm:pl-10 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition dark:text-white"
-                  placeholder="you@example.com"
+                  placeholder="Enter your email"
                 />
               </div>
             </div>
