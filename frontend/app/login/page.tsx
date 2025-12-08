@@ -158,9 +158,9 @@ export default function LoginPage() {
 
             {/* Test Account Info */}
             <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-center">
+              {/* <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-center">
                 <span className="font-medium">Test Account:</span> test2@example.com / test123
-              </p>
+              </p> */}
             </div>
 
             <div className="text-center">
