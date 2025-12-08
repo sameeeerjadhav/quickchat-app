@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, UserCheck, Bell, UserPlus, UserX, Check, X, RefreshCw, ChevronLeft, Menu } from 'lucide-react';
 import { authAPI, friendAPI, userAPI } from '../../lib/api';
@@ -10,6 +10,7 @@ import FriendRequests from '../components/FriendRequests';
 import UserSearch from '../components/UserSearch';
 import ThemeToggle from '../components/ThemeToggle';
 import Link from 'next/link';
+import { usePolling } from '../hooks/usePolling';
 
 export default function FriendsPage() {
   const router = useRouter();
@@ -40,6 +41,173 @@ export default function FriendsPage() {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // ======================
+  // AUTO-REFRESH FUNCTIONS
+  // ======================
+
+  const fetchFriends = useCallback(async () => {
+    try {
+      const response = await friendAPI.getFriends();
+      let friendsData: Friend[] = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          friendsData = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          friendsData = response.data.data;
+        } else if (response.data.success && Array.isArray(response.data.data)) {
+          friendsData = response.data.data;
+        } else if (response.data.friends && Array.isArray(response.data.friends)) {
+          friendsData = response.data.friends;
+        }
+      }
+      
+      setFriends(friendsData);
+      return friendsData;
+    } catch (err) {
+      console.error('Failed to fetch friends:', err);
+      return friends; // Return current state on error
+    }
+  }, [friends]);
+
+  const fetchRequests = useCallback(async () => {
+    try {
+      const response = await friendAPI.getRequests();
+      let requestsData: FriendRequest[] = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          requestsData = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          requestsData = response.data.data;
+        } else if (response.data.success && Array.isArray(response.data.data)) {
+          requestsData = response.data.data;
+        }
+      }
+      
+      setRequests(requestsData);
+      return requestsData;
+    } catch (err) {
+      console.error('Failed to fetch requests:', err);
+      return requests; // Return current state on error
+    }
+  }, [requests]);
+
+  const fetchAllUsers = useCallback(async () => {
+    try {
+      const response = await userAPI.getAll();
+      let usersData: any[] = [];
+      
+      if (response.data) {
+        const data = response.data;
+        
+        if (data.data) {
+          const apiData = data.data;
+          if (apiData.all && Array.isArray(apiData.all)) {
+            usersData = apiData.all;
+          } else if (apiData.users && Array.isArray(apiData.users)) {
+            usersData = apiData.users;
+          } else if ((apiData.friends || apiData.otherUsers)) {
+            const friendsList = apiData.friends || [];
+            const otherUsersList = apiData.otherUsers || [];
+            usersData = [...friendsList, ...otherUsersList];
+          } else if (Array.isArray(apiData)) {
+            usersData = apiData;
+          }
+        } else if (Array.isArray(data)) {
+          usersData = data;
+        } else if (data.success && Array.isArray(data.data)) {
+          usersData = data.data;
+        }
+      }
+      
+      if (currentUserId) {
+        usersData = usersData.filter(user => user._id !== currentUserId);
+      }
+      
+      setAllUsers(usersData);
+      return usersData;
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+      return allUsers; // Return current state on error
+    }
+  }, [currentUserId, allUsers]);
+
+  const fetchBlockedUsers = useCallback(async () => {
+    try {
+      const response = await friendAPI.getBlockedUsers();
+      let blockedData: string[] = [];
+      
+      if (response.data) {
+        let blockedList: any[] = [];
+        
+        if (Array.isArray(response.data)) {
+          blockedList = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          blockedList = response.data.data;
+        } else if (response.data.success && Array.isArray(response.data.data)) {
+          blockedList = response.data.data;
+        }
+        
+        blockedData = blockedList
+          .map((block: any) => block.user?._id || block.user || block._id || block.id)
+          .filter(Boolean);
+      }
+      
+      setBlockedUsers(blockedData);
+      return blockedData;
+    } catch (err) {
+      console.error('Failed to fetch blocked users:', err);
+      return blockedUsers; // Return current state on error
+    }
+  }, [blockedUsers]);
+
+  // Auto-refresh active tab data every 10 seconds
+  usePolling(() => {
+    if (!currentUserId || loading) return;
+    
+    console.log('🔄 Auto-refreshing friends page data...');
+    
+    switch (activeTab) {
+      case 'friends':
+        fetchFriends();
+        break;
+      case 'requests':
+        fetchRequests();
+        break;
+      case 'search':
+        fetchAllUsers();
+        break;
+      case 'blocked':
+        fetchBlockedUsers();
+        break;
+    }
+  }, 10000); // 10 seconds
+
+  // Auto-refresh all data when tab changes
+  useEffect(() => {
+    if (!currentUserId || loading) return;
+    
+    const refreshTabData = async () => {
+      switch (activeTab) {
+        case 'friends':
+          await fetchFriends();
+          break;
+        case 'requests':
+          await fetchRequests();
+          break;
+        case 'search':
+          await fetchAllUsers();
+          break;
+        case 'blocked':
+          await fetchBlockedUsers();
+          break;
+      }
+    };
+    
+    refreshTabData();
+  }, [activeTab, currentUserId, loading, fetchFriends, fetchRequests, fetchAllUsers, fetchBlockedUsers]);
 
   const checkAuth = async () => {
     try {
@@ -85,131 +253,12 @@ export default function FriendsPage() {
         fetchAllUsers(),
         fetchBlockedUsers()
       ]);
+      showNotification('success', 'Data refreshed!');
     } catch (error) {
       console.error('Error refreshing data:', error);
+      showNotification('error', 'Failed to refresh data');
     } finally {
       setRefreshing(false);
-    }
-  };
-
-  const fetchFriends = async () => {
-    try {
-      const response = await friendAPI.getFriends();
-      let friendsData: Friend[] = [];
-      
-      if (response.data) {
-        if (Array.isArray(response.data)) {
-          friendsData = response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          friendsData = response.data.data;
-        } else if (response.data.success && Array.isArray(response.data.data)) {
-          friendsData = response.data.data;
-        } else if (response.data.friends && Array.isArray(response.data.friends)) {
-          friendsData = response.data.friends;
-        }
-      }
-      
-      setFriends(friendsData);
-      return friendsData;
-    } catch (err) {
-      console.error('Failed to fetch friends:', err);
-      setFriends([]);
-      return [];
-    }
-  };
-
-  const fetchRequests = async () => {
-    try {
-      const response = await friendAPI.getRequests();
-      let requestsData: FriendRequest[] = [];
-      
-      if (response.data) {
-        if (Array.isArray(response.data)) {
-          requestsData = response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          requestsData = response.data.data;
-        } else if (response.data.success && Array.isArray(response.data.data)) {
-          requestsData = response.data.data;
-        }
-      }
-      
-      setRequests(requestsData);
-      return requestsData;
-    } catch (err) {
-      console.error('Failed to fetch requests:', err);
-      setRequests([]);
-      return [];
-    }
-  };
-
-  const fetchAllUsers = async () => {
-    try {
-      const response = await userAPI.getAll();
-      let usersData: any[] = [];
-      
-      if (response.data) {
-        const data = response.data;
-        
-        if (data.data) {
-          const apiData = data.data;
-          if (apiData.all && Array.isArray(apiData.all)) {
-            usersData = apiData.all;
-          } else if (apiData.users && Array.isArray(apiData.users)) {
-            usersData = apiData.users;
-          } else if ((apiData.friends || apiData.otherUsers)) {
-            const friendsList = apiData.friends || [];
-            const otherUsersList = apiData.otherUsers || [];
-            usersData = [...friendsList, ...otherUsersList];
-          } else if (Array.isArray(apiData)) {
-            usersData = apiData;
-          }
-        } else if (Array.isArray(data)) {
-          usersData = data;
-        } else if (data.success && Array.isArray(data.data)) {
-          usersData = data.data;
-        }
-      }
-      
-      if (currentUserId) {
-        usersData = usersData.filter(user => user._id !== currentUserId);
-      }
-      
-      setAllUsers(usersData);
-      return usersData;
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
-      setAllUsers([]);
-      return [];
-    }
-  };
-
-  const fetchBlockedUsers = async () => {
-    try {
-      const response = await friendAPI.getBlockedUsers();
-      let blockedData: string[] = [];
-      
-      if (response.data) {
-        let blockedList: any[] = [];
-        
-        if (Array.isArray(response.data)) {
-          blockedList = response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          blockedList = response.data.data;
-        } else if (response.data.success && Array.isArray(response.data.data)) {
-          blockedList = response.data.data;
-        }
-        
-        blockedData = blockedList
-          .map((block: any) => block.user?._id || block.user || block._id || block.id)
-          .filter(Boolean);
-      }
-      
-      setBlockedUsers(blockedData);
-      return blockedData;
-    } catch (err) {
-      console.error('Failed to fetch blocked users:', err);
-      setBlockedUsers([]);
-      return [];
     }
   };
 
@@ -217,8 +266,8 @@ export default function FriendsPage() {
     try {
       await friendAPI.sendRequest(userId);
       showNotification('success', 'Friend request sent!');
-      await fetchRequests();
-      await fetchAllUsers();
+      // Refresh relevant data immediately
+      await Promise.all([fetchRequests(), fetchAllUsers()]);
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to send request');
     }
@@ -228,8 +277,8 @@ export default function FriendsPage() {
     try {
       await friendAPI.cancelRequest(userId);
       showNotification('success', 'Request cancelled!');
-      await fetchRequests();
-      await fetchAllUsers();
+      // Refresh relevant data immediately
+      await Promise.all([fetchRequests(), fetchAllUsers()]);
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to cancel request');
     }
@@ -239,6 +288,7 @@ export default function FriendsPage() {
     try {
       await friendAPI.acceptRequest(requestId);
       showNotification('success', 'Friend request accepted!');
+      // Refresh all data immediately
       await refreshAllData();
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to accept request');
@@ -249,8 +299,8 @@ export default function FriendsPage() {
     try {
       await friendAPI.rejectRequest(requestId);
       showNotification('success', 'Friend request rejected!');
-      await fetchRequests();
-      await fetchAllUsers();
+      // Refresh relevant data immediately
+      await Promise.all([fetchRequests(), fetchAllUsers()]);
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to reject request');
     }
@@ -260,8 +310,8 @@ export default function FriendsPage() {
     try {
       await friendAPI.removeFriend(friendId);
       showNotification('success', 'Friend removed!');
-      await fetchFriends();
-      await fetchAllUsers();
+      // Refresh relevant data immediately
+      await Promise.all([fetchFriends(), fetchAllUsers()]);
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to remove friend');
     }
@@ -271,6 +321,7 @@ export default function FriendsPage() {
     try {
       await friendAPI.blockUser(userId);
       showNotification('success', 'User blocked!');
+      // Refresh all data immediately
       await refreshAllData();
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to block user');
@@ -281,6 +332,7 @@ export default function FriendsPage() {
     try {
       await friendAPI.unblockUser(userId);
       showNotification('success', 'User unblocked!');
+      // Refresh all data immediately
       await refreshAllData();
     } catch (err: any) {
       showNotification('error', err.response?.data?.message || 'Failed to unblock user');
@@ -440,6 +492,13 @@ export default function FriendsPage() {
           </p>
         </div>
       )}
+
+      {/* Auto-refresh indicator */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-1 text-center">
+        <p className="text-xs text-blue-700 dark:text-blue-300">
+          🔄 Auto-refreshing every 10 seconds
+        </p>
+      </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto p-2 sm:p-4">
