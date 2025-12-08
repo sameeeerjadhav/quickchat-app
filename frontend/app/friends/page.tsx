@@ -183,7 +183,7 @@ export default function FriendsPage() {
         fetchBlockedUsers();
         break;
     }
-  }, 10000); // 10 seconds
+  }, 3000); // 10 seconds
 
   // Auto-refresh all data when tab changes
   useEffect(() => {
