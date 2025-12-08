@@ -95,7 +95,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 **Sameer Jadhav**  
 - GitHub: [@sameeeerjadhav](https://github.com/sameeeerjadhav)
-- LinkedIn: [Sameer Jadhav](https://linkedin.com/in/sameer-jadhav)
+- LinkedIn: [Sameer Jadhav](https://www.linkedin.com/in/sameer-jadhav-a040921b5/)
 
 ---
 
