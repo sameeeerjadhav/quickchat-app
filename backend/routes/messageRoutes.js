@@ -30,7 +30,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
@@ -59,20 +59,21 @@ router.put('/read', markAsRead);
 // Send file
 router.post('/send-file', upload.single('file'), async (req, res) => {
   try {
-    const { receiverId, senderId, fileType, text } = req.body;
+    const { receiverId, senderId, fileType, text, duration } = req.body;
     const file = req.file;
-    
+
     if (!file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    
+
     console.log('📁 File uploaded:', {
       fileName: file.originalname,
       fileType: fileType,
       size: file.size,
-      mimetype: file.mimetype
+      mimetype: file.mimetype,
+      duration: duration
     });
-    
+
     // Determine file type from mimetype if not provided
     let finalFileType = fileType;
     if (!finalFileType && file.mimetype) {
@@ -86,7 +87,7 @@ router.post('/send-file', upload.single('file'), async (req, res) => {
         finalFileType = 'file';
       }
     }
-    
+
     // Create message with file URL
     const message = await Message.create({
       sender: senderId,
@@ -95,19 +96,20 @@ router.post('/send-file', upload.single('file'), async (req, res) => {
       fileUrl: `/uploads/${file.filename}`,
       fileType: finalFileType,
       fileName: file.originalname,
-      fileSize: file.size
+      fileSize: file.size,
+      duration: duration ? parseInt(duration) : undefined
     });
-    
+
     console.log('💾 Message saved to database:', {
       _id: message._id,
       fileUrl: message.fileUrl,
       fileType: message.fileType,
       fileName: message.fileName
     });
-    
+
     // Emit via socket to specific rooms
     const io = req.app.get('io');
-    
+
     // Build the message object for socket emission
     const socketMessage = {
       _id: message._id,
@@ -118,32 +120,33 @@ router.post('/send-file', upload.single('file'), async (req, res) => {
       fileType: message.fileType,
       fileName: message.fileName,
       fileSize: message.fileSize,
+      duration: message.duration,
       createdAt: message.createdAt
     };
-    
+
     // Emit to receiver's room
     io.to(`user-${receiverId}`).emit('receive-message', {
       ...socketMessage,
       isRead: false
     });
-    
+
     // Emit to sender's room
     io.to(`user-${senderId}`).emit('receive-message', {
       ...socketMessage,
       isRead: true  // Sender has already seen it
     });
-    
+
     console.log('📡 File message emitted via socket:', {
       toReceiver: receiverId,
       toSender: senderId,
       fileName: message.fileName
     });
-    
-    res.json({ 
-      success: true, 
-      message: socketMessage 
+
+    res.json({
+      success: true,
+      message: socketMessage
     });
-    
+
   } catch (error) {
     console.error('File upload error:', error);
     res.status(500).json({ error: error.message });

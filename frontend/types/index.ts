@@ -1,15 +1,17 @@
 export interface Message {
   _id: string;
-  sender: User | string;
-  receiver: User | string;
   content: string;
-  isRead: boolean;
+  sender: string;
+  receiver: string;
+  isRead?: boolean;
   createdAt: string;
   updatedAt: string;
-  fileUrl?: string;        // Add this
-  fileType?: string;       // Add this
+  // Media/File properties
+  fileUrl?: string;
+  fileType?: 'image' | 'video' | 'audio' | 'file';
   fileName?: string;
-  fileSize?: number;      // Add this
+  fileSize?: number;
+  duration?: number; // For voice messages - duration in seconds
 }
 
 export interface Conversation {

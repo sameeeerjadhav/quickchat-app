@@ -10,9 +10,13 @@ import FriendRequests from '../components/FriendRequests';
 import UserSearch from '../components/UserSearch';
 import ThemeToggle from '../components/ThemeToggle';
 import Link from 'next/link';
+import { useSocket } from '../hooks/useSocket';
+import FriendSkeleton from '../components/Skeletons/FriendSkeleton';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function FriendsPage() {
   const router = useRouter();
+  const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search' | 'blocked'>('friends');
   const [currentUserId, setCurrentUserId] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -41,28 +45,50 @@ export default function FriendsPage() {
     checkAuth();
   }, []);
 
+  // Socket event listeners for auto-refresh
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRefresh = () => {
+      console.log('🔄 Socket event received, refreshing data...');
+      refreshAllData();
+    };
+
+    socket.on('friend-request-received', handleRefresh);
+    socket.on('friend-request-accepted', handleRefresh);
+    socket.on('friend-status-updated', handleRefresh);
+    socket.on('user-status-change', handleRefresh); // Update online status in lists
+
+    return () => {
+      socket.off('friend-request-received', handleRefresh);
+      socket.off('friend-request-accepted', handleRefresh);
+      socket.off('friend-status-updated', handleRefresh);
+      socket.off('user-status-change', handleRefresh);
+    };
+  }, [socket]);
+
   const checkAuth = async () => {
     try {
       const response = await authAPI.getProfile();
-      
+
       let userId = '';
-      
+
       if (response.data) {
         const data = response.data;
-        
+
         // Find user ID in response
         if (data.user?._id) userId = data.user._id;
         else if (data._id) userId = data._id;
         else if (data.id) userId = data.id;
         else if (data.data?._id) userId = data.data._id;
       }
-      
+
       setCurrentUserId(userId);
-      
+
       if (userId) {
         await refreshAllData();
       }
-      
+
       setLoading(false);
     } catch (err: any) {
       console.error('Auth error:', err);
@@ -96,7 +122,7 @@ export default function FriendsPage() {
     try {
       const response = await friendAPI.getFriends();
       let friendsData: Friend[] = [];
-      
+
       if (response.data) {
         if (Array.isArray(response.data)) {
           friendsData = response.data;
@@ -108,7 +134,7 @@ export default function FriendsPage() {
           friendsData = response.data.friends;
         }
       }
-      
+
       setFriends(friendsData);
       return friendsData;
     } catch (err) {
@@ -122,7 +148,7 @@ export default function FriendsPage() {
     try {
       const response = await friendAPI.getRequests();
       let requestsData: FriendRequest[] = [];
-      
+
       if (response.data) {
         if (Array.isArray(response.data)) {
           requestsData = response.data;
@@ -132,7 +158,7 @@ export default function FriendsPage() {
           requestsData = response.data.data;
         }
       }
-      
+
       setRequests(requestsData);
       return requestsData;
     } catch (err) {
@@ -146,10 +172,10 @@ export default function FriendsPage() {
     try {
       const response = await userAPI.getAll();
       let usersData: any[] = [];
-      
+
       if (response.data) {
         const data = response.data;
-        
+
         if (data.data) {
           const apiData = data.data;
           if (apiData.all && Array.isArray(apiData.all)) {
@@ -169,11 +195,11 @@ export default function FriendsPage() {
           usersData = data.data;
         }
       }
-      
+
       if (currentUserId) {
         usersData = usersData.filter(user => user._id !== currentUserId);
       }
-      
+
       setAllUsers(usersData);
       return usersData;
     } catch (err) {
@@ -187,10 +213,10 @@ export default function FriendsPage() {
     try {
       const response = await friendAPI.getBlockedUsers();
       let blockedData: string[] = [];
-      
+
       if (response.data) {
         let blockedList: any[] = [];
-        
+
         if (Array.isArray(response.data)) {
           blockedList = response.data;
         } else if (response.data.data && Array.isArray(response.data.data)) {
@@ -198,12 +224,12 @@ export default function FriendsPage() {
         } else if (response.data.success && Array.isArray(response.data.data)) {
           blockedList = response.data.data;
         }
-        
+
         blockedData = blockedList
           .map((block: any) => block.user?._id || block.user || block._id || block.id)
           .filter(Boolean);
       }
-      
+
       setBlockedUsers(blockedData);
       return blockedData;
     } catch (err) {
@@ -312,103 +338,116 @@ export default function FriendsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center p-4 sm:p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md mx-4">
-          <div className="animate-spin rounded-full h-12 sm:h-16 w-12 sm:w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4 sm:mb-6"></div>
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white mb-2">Loading Friends</h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">Please wait while we load your friend data...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-black">
+        {/* Header Skeleton */}
+        <header className="sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-zinc-900 animate-pulse"></div>
+            <div className="space-y-2">
+              <div className="h-4 w-24 bg-slate-200 dark:bg-zinc-900 rounded animate-pulse"></div>
+              <div className="h-3 w-16 bg-slate-200 dark:bg-zinc-900 rounded animate-pulse"></div>
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          {/* Tabs Skeleton */}
+          <div className="h-12 bg-slate-200 dark:bg-zinc-900 rounded-xl animate-pulse"></div>
+
+          {/* Content Skeleton */}
+          <div className="bg-white dark:bg-black rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800 p-6 space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <FriendSkeleton key={i} />
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-black">
       {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 px-3 sm:px-4 py-3 flex items-center justify-between sticky top-0 z-50 bg-white dark:bg-gray-900">
-        <div className="flex items-center space-x-2 sm:space-x-3">
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm transition-all duration-300">
+        <div className="flex items-center space-x-3 sm:space-x-4">
           {isMobile && (
             <button
               onClick={() => router.back()}
-              className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
           )}
-          
-          <div className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center`}>
+
+          <div className={`${isMobile ? 'h-9 w-9' : 'h-11 w-11'} rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20`}>
             <Users className={isMobile ? "h-4 w-4 text-white" : "h-5 w-5 text-white"} />
           </div>
           <div className="min-w-0">
-            <h1 className="font-semibold text-gray-800 dark:text-white text-sm sm:text-base truncate">Friends</h1>
-            <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 truncate`}>
-              {friends.length} friends • {requests.length} pending
+            <h1 className="font-bold text-slate-900 dark:text-white text-base sm:text-lg truncate">Friends</h1>
+            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 font-medium truncate`}>
+              {friends.length} users connected
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2 sm:gap-4">
           {!isMobile && (
             <>
-              <Link 
+              <Link
                 href="/chat"
-                className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-sm font-medium"
+                className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 text-sm font-medium transition-colors"
               >
                 ← Back to Chat
               </Link>
-              
+
               <button
                 onClick={refreshAllData}
                 disabled={refreshing}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg ${
-                  refreshing 
-                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400' 
-                    : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all duration-200 ${refreshing
+                  ? 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                  : 'bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:shadow-sm active:scale-95'
+                  }`}
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 {refreshing ? 'Refreshing...' : 'Refresh'}
               </button>
             </>
           )}
-          
+
           {isMobile && (
             <button
               onClick={refreshAllData}
               disabled={refreshing}
-              className={`p-2 rounded-lg ${
-                refreshing 
-                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400' 
-                  : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800'
-              }`}
+              className={`p-2.5 rounded-xl transition-all duration-200 ${refreshing
+                ? 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'
+                : 'bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800'
+                }`}
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
           )}
-          
+
           <ThemeToggle />
         </div>
       </header>
 
       {/* Mobile Tabs Menu */}
       {isMobile && showMobileMenu && (
-        <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowMobileMenu(false)}>
-          <div className="absolute right-0 top-0 h-full w-64 bg-white dark:bg-gray-800 shadow-xl animate-slide-in">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Menu</h3>
-                <button
-                  onClick={() => setShowMobileMenu(false)}
-                  className="p-1 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
+          <div className="absolute right-0 top-0 h-full w-72 bg-white dark:bg-black shadow-2xl animate-slide-in p-4 border-l border-slate-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white">Menu</h3>
+              <button
+                onClick={() => setShowMobileMenu(false)}
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="p-2">
+            <div className="space-y-2">
               <Link
                 href="/chat"
-                className="flex items-center gap-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                className="flex items-center gap-3 px-4 py-3.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-medium transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -421,49 +460,50 @@ export default function FriendsPage() {
 
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 p-3 sm:p-4 rounded-lg shadow-lg flex items-center max-w-xs sm:max-w-md ${
-          notification.type === 'success' 
-            ? 'bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-800' 
-            : 'bg-red-100 dark:bg-red-900 border border-red-200 dark:border-red-800'
-        }`}>
-          {notification.type === 'success' ? (
-            <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400 mr-2 flex-shrink-0" />
-          ) : (
-            <X className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0" />
-          )}
-          <p className={`text-xs sm:text-sm ${
-            notification.type === 'success' 
-              ? 'text-green-800 dark:text-green-400' 
-              : 'text-red-800 dark:text-red-400'
+        <div className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-xl flex items-center max-w-sm animate-fade-in border ${notification.type === 'success'
+          ? 'bg-white dark:bg-zinc-900 border-green-500/20 text-green-600 dark:text-green-400'
+          : 'bg-white dark:bg-zinc-900 border-red-500/20 text-red-600 dark:text-red-400'
           }`}>
+          {notification.type === 'success' ? (
+            <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mr-3 flex-shrink-0">
+              <Check className="h-4 w-4" />
+            </div>
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mr-3 flex-shrink-0">
+              <X className="h-4 w-4" />
+            </div>
+          )}
+          <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
             {notification.message}
           </p>
         </div>
       )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto p-2 sm:p-4">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-800 mb-4 sm:mb-6 overflow-x-auto">
+        <div className="bg-white dark:bg-black rounded-xl shadow-sm border border-slate-200 dark:border-zinc-800 p-1.5 mb-6 sm:mb-8 overflow-x-auto flex space-x-1">
           {[
             { id: 'friends', icon: UserCheck, label: 'Friends', count: friends.length },
             { id: 'requests', icon: Bell, label: 'Requests', count: requests.length },
-            { id: 'search', icon: UserPlus, label: 'Add', count: null },
+            { id: 'search', icon: UserPlus, label: 'Add Friend', count: null },
             { id: 'blocked', icon: UserX, label: 'Blocked', count: blockedUsers.length },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center px-2 sm:px-4 py-2 text-xs sm:text-sm border-b-2 font-medium whitespace-nowrap flex-1 sm:flex-none ${
-                activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
-              }`}
+              className={`flex items-center justify-center px-4 py-2.5 text-sm font-medium rounded-lg flex-1 sm:flex-none transition-all duration-200 ${activeTab === tab.id
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
             >
-              <tab.icon className={`${isMobile ? 'h-3 w-3 mr-1' : 'h-4 w-4 mr-2'}`} />
-              <span className="truncate">{isMobile ? tab.label : `${tab.label} ${tab.count !== null ? `(${tab.count})` : ''}`}</span>
-              {isMobile && tab.count !== null && tab.count > 0 && (
-                <span className="ml-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-400 text-[10px] px-1 rounded">
+              <tab.icon className={`${isMobile ? 'h-4 w-4 mr-1.5' : 'h-4 w-4 mr-2'}`} />
+              <span className="whitespace-nowrap">{tab.label}</span>
+              {tab.count !== null && tab.count > 0 && (
+                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-md font-semibold ${activeTab === tab.id
+                  ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200'
+                  : 'bg-slate-100 dark:bg-zinc-900 text-slate-600 dark:text-slate-400'
+                  }`}>
                   {tab.count}
                 </span>
               )}
@@ -472,288 +512,247 @@ export default function FriendsPage() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
-          {activeTab === 'friends' && (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-white`}>
-                  {isMobile ? 'Friends' : 'My Friends'}
-                </h2>
-                {!isMobile && (
-                  <button
-                    onClick={fetchFriends}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                    Refresh
-                  </button>
-                )}
-              </div>
-              
-              {friends.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <div className={`mx-auto mb-4 sm:mb-6 rounded-full bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 flex items-center justify-center ${
-                    isMobile ? 'h-16 w-16' : 'h-24 w-24'
-                  }`}>
-                    <UserCheck className={isMobile ? "h-8 w-8 text-gray-400" : "h-12 w-12 text-gray-400"} />
-                  </div>
-                  <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold text-gray-900 dark:text-white mb-2`}>
-                    No friends yet
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto text-sm sm:text-base px-2">
-                    Start by adding friends from the "Add Friends" tab.
-                  </p>
-                  <div className={`flex ${isMobile ? 'flex-col gap-2' : 'space-x-4'} justify-center`}>
+        <div className="bg-white dark:bg-black rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800 p-4 sm:p-6 min-h-[400px]">
+          <AnimatePresence mode="wait">
+            {activeTab === 'friends' && (
+              <motion.div
+                key="friends"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    My Friends
+                    <span className="text-sm font-medium text-slate-500 bg-slate-100 dark:bg-zinc-900 px-2 py-0.5 rounded-full">
+                      {friends.length}
+                    </span>
+                  </h2>
+                  {!isMobile && (
+                    <button
+                      onClick={fetchFriends}
+                      className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      title="Refresh List"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {friends.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-zinc-900 flex items-center justify-center mb-6 ring-1 ring-slate-100 dark:ring-slate-700">
+                      <UserCheck className="h-10 w-10 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                      No friends yet
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
+                      Your friend list is empty. Start connecting with people to chat!
+                    </p>
                     <button
                       onClick={() => setActiveTab('search')}
-                      className={`${
-                        isMobile ? 'w-full px-4 py-2.5 text-sm' : 'px-6 py-3'
-                      } bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 font-medium`}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2"
                     >
+                      <UserPlus className="h-5 w-5" />
                       Find Friends
                     </button>
-                    {!isMobile && (
-                      <button
-                        onClick={refreshAllData}
-                        className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
-                      >
-                        Refresh All Data
-                      </button>
-                    )}
                   </div>
-                </div>
-              ) : (
-                <FriendList
-                  friends={friends}
-                  currentUserId={currentUserId}
-                  onSelectFriend={handleSelectFriend}
-                  onRemoveFriend={handleRemoveFriend}
-                  isMobile={isMobile}
-                />
-              )}
-            </>
-          )}
-          
-          {activeTab === 'requests' && (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-white`}>
-                  {isMobile ? 'Requests' : 'Friend Requests'}
-                </h2>
-                {!isMobile && (
-                  <button
-                    onClick={fetchRequests}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                    Refresh
-                  </button>
+                ) : (
+                  <FriendList
+                    friends={friends}
+                    currentUserId={currentUserId}
+                    onSelectFriend={handleSelectFriend}
+                    onRemoveFriend={handleRemoveFriend}
+                    isMobile={isMobile}
+                  />
                 )}
-              </div>
-              
-              {requests.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <div className={`mx-auto mb-4 sm:mb-6 rounded-full bg-gradient-to-r from-yellow-100 to-orange-100 dark:from-yellow-900/20 dark:to-orange-900/20 flex items-center justify-center ${
-                    isMobile ? 'h-16 w-16' : 'h-24 w-24'
-                  }`}>
-                    <Bell className={isMobile ? "h-8 w-8 text-gray-400" : "h-12 w-12 text-gray-400"} />
-                  </div>
-                  <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold text-gray-900 dark:text-white mb-2`}>
-                    No pending requests
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto text-sm sm:text-base px-2">
-                    When someone sends you a friend request, it will appear here.
-                  </p>
+              </motion.div>
+            )}
+
+            {activeTab === 'requests' && (
+              <motion.div
+                key="requests"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Friend Requests
+                    {requests.length > 0 && (
+                      <span className="text-sm font-medium text-white bg-blue-600 px-2 py-0.5 rounded-full">
+                        {requests.length} New
+                      </span>
+                    )}
+                  </h2>
                   {!isMobile && (
                     <button
-                      onClick={refreshAllData}
-                      className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
+                      onClick={fetchRequests}
+                      className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                     >
-                      Refresh All Data
+                      <RefreshCw className="h-4 w-4" />
                     </button>
                   )}
                 </div>
-              ) : (
-                <FriendRequests
-                  requests={requests}
-                  onAcceptRequest={handleAcceptRequest}
-                  onRejectRequest={handleRejectRequest}
-                  isMobile={isMobile}
-                />
-              )}
-            </>
-          )}
-          
-          {activeTab === 'search' && (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-white`}>
-                  {isMobile ? 'Add Friends' : 'Add Friends'}
-                </h2>
-                <div className="flex items-center gap-2">
-                  {!isMobile && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {allUsers.length} users found
-                    </span>
-                  )}
-                  <button
-                    onClick={fetchAllUsers}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                    {isMobile ? '' : 'Refresh'}
-                  </button>
-                </div>
-              </div>
-              
-              {allUsers.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <div className={`mx-auto mb-4 sm:mb-6 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 flex items-center justify-center ${
-                    isMobile ? 'h-16 w-16' : 'h-24 w-24'
-                  }`}>
-                    <UserPlus className={isMobile ? "h-8 w-8 text-gray-400" : "h-12 w-12 text-gray-400"} />
+
+                {requests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-zinc-900 flex items-center justify-center mb-6 ring-1 ring-slate-100 dark:ring-slate-700">
+                      <Bell className="h-10 w-10 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                      No pending requests
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                      You're all caught up! When you receive a friend request, it will appear here.
+                    </p>
                   </div>
-                  <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold text-gray-900 dark:text-white mb-2`}>
-                    No users found
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto text-sm sm:text-base px-2">
-                    Try refreshing the list.
-                  </p>
-                  <button
-                    onClick={refreshAllData}
-                    className={`${
-                      isMobile ? 'w-full px-4 py-2.5' : 'px-6 py-3'
-                    } bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium`}
-                  >
-                    Refresh All Data
-                  </button>
+                ) : (
+                  <FriendRequests
+                    requests={requests}
+                    onAcceptRequest={handleAcceptRequest}
+                    onRejectRequest={handleRejectRequest}
+                    isMobile={isMobile}
+                  />
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === 'search' && (
+              <motion.div
+                key="search"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Add Friends
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    {!isMobile && (
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-zinc-900 px-3 py-1 rounded-full">
+                        {allUsers.length} users
+                      </span>
+                    )}
+                    <button
+                      onClick={fetchAllUsers}
+                      className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <UserSearch
-                  users={allUsers}
-                  currentUserId={currentUserId}
-                  onSendRequest={handleSendRequest}
-                  onCancelRequest={handleCancelRequest}
-                  onRemoveFriend={handleRemoveFriend}
-                  onUnblockUser={handleUnblockUser}
-                  friends={getFriendUserIds()}
-                  pendingRequests={getPendingRequestUserIds()}
-                  blockedUsers={blockedUsers}
-                  isMobile={isMobile}
-                />
-              )}
-            </>
-          )}
-          
-          {activeTab === 'blocked' && (
-            <div>
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-white`}>
-                  {isMobile ? 'Blocked' : 'Blocked Users'}
-                </h2>
-                <div className="flex items-center gap-2">
-                  {!isMobile && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {blockedUsers.length} blocked users
-                    </span>
-                  )}
+
+                {allUsers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-zinc-900 flex items-center justify-center mb-6 ring-1 ring-slate-100 dark:ring-slate-700">
+                      <UserPlus className="h-10 w-10 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                      No users found
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+                      We couldn't find any other users to add.
+                    </p>
+                    <button
+                      onClick={refreshAllData}
+                      className="px-6 py-2.5 bg-slate-100 dark:bg-zinc-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-800 rounded-lg font-medium transition-colors"
+                    >
+                      Refresh List
+                    </button>
+                  </div>
+                ) : (
+                  <UserSearch
+                    users={allUsers}
+                    currentUserId={currentUserId}
+                    onSendRequest={handleSendRequest}
+                    onCancelRequest={handleCancelRequest}
+                    onRemoveFriend={handleRemoveFriend}
+                    onUnblockUser={handleUnblockUser}
+                    friends={getFriendUserIds()}
+                    pendingRequests={getPendingRequestUserIds()}
+                    blockedUsers={blockedUsers}
+                    isMobile={isMobile}
+                  />
+                )}
+              </motion.div>
+            )}
+            {activeTab === 'blocked' && (
+              <motion.div
+                key="blocked"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Blocked Users
+                    {blockedUsers.length > 0 && (
+                      <span className="text-sm font-medium text-slate-500 bg-slate-100 dark:bg-zinc-900 px-2 py-0.5 rounded-full">
+                        {blockedUsers.length}
+                      </span>
+                    )}
+                  </h2>
                   <button
                     onClick={fetchBlockedUsers}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                    className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                   >
-                    <RefreshCw className="h-3 w-3" />
-                    {isMobile ? '' : 'Refresh'}
+                    <RefreshCw className="h-4 w-4" />
                   </button>
                 </div>
-              </div>
-              
-              {blockedUsers.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <div className={`mx-auto mb-4 sm:mb-6 rounded-full bg-gradient-to-r from-red-100 to-pink-100 dark:from-red-900/20 dark:to-pink-900/20 flex items-center justify-center ${
-                    isMobile ? 'h-16 w-16' : 'h-24 w-24'
-                  }`}>
-                    <UserX className={isMobile ? "h-8 w-8 text-gray-400" : "h-12 w-12 text-gray-400"} />
+
+                {blockedUsers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-24 w-24 rounded-full bg-slate-50 dark:bg-zinc-900 flex items-center justify-center mb-6 ring-1 ring-slate-100 dark:ring-slate-700">
+                      <UserX className="h-10 w-10 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                      No blocked users
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                      You haven't blocked anyone yet.
+                    </p>
                   </div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">No blocked users</p>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-500 mt-2 px-4">
-                    Users you block will appear here.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2 sm:space-y-3">
-                  {allUsers
-                    .filter(user => blockedUsers.includes(user._id))
-                    .map((user) => (
-                      <div key={user._id} className={`flex items-center justify-between ${
-                        isMobile ? 'p-3' : 'p-4'
-                      } bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors`}>
-                        <div className="flex items-center space-x-2 sm:space-x-3">
-                          <div className={`${
-                            isMobile ? 'h-10 w-10 text-sm' : 'h-12 w-12 text-lg'
-                          } rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center text-white font-medium`}>
-                            {user.name?.charAt(0) || 'U'}
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {allUsers
+                      .filter(user => blockedUsers.includes(user._id))
+                      .map((user) => (
+                        <div key={user._id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl border border-slate-200 dark:border-zinc-800 hover:shadow-md transition-all">
+                          <div className="flex items-center space-x-3">
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-red-500/20">
+                              {user.name?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-semibold text-slate-900 dark:text-white truncate">
+                                {user.name || 'Unknown User'}
+                              </h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                Blocked
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h4 className={`${
-                              isMobile ? 'text-sm' : 'text-base'
-                            } font-medium text-gray-900 dark:text-white truncate`}>
-                              {user.name || 'Unknown User'}
-                            </h4>
-                            <p className={`${
-                              isMobile ? 'text-xs' : 'text-sm'
-                            } text-gray-500 dark:text-gray-400 truncate`}>
-                              {user.email || 'No email'}
-                            </p>
-                          </div>
+                          <button
+                            onClick={() => handleUnblockUser(user._id)}
+                            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-zinc-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-zinc-700 rounded-lg hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
+                          >
+                            Unblock
+                          </button>
                         </div>
-                        <button
-                          onClick={() => handleUnblockUser(user._id)}
-                          className={`${
-                            isMobile ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'
-                          } bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors`}
-                        >
-                          {isMobile ? 'Unblock' : 'Unblock'}
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          )}
+                      ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-
-      {/* Mobile Bottom Navigation */}
-      {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-2 z-40">
-          <div className="flex justify-around">
-            <Link
-              href="/chat"
-              className="flex flex-col items-center text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-            >
-              <ChevronLeft className="h-5 w-5 mb-1" />
-              <span className="text-xs">Chats</span>
-            </Link>
-            <button
-              onClick={refreshAllData}
-              className="flex flex-col items-center text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-            >
-              <RefreshCw className={`h-5 w-5 mb-1 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="text-xs">Refresh</span>
-            </button>
-            <button
-              onClick={() => setShowMobileMenu(true)}
-              className="flex flex-col items-center text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-            >
-              <Menu className="h-5 w-5 mb-1" />
-              <span className="text-xs">Menu</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Add space for mobile bottom nav */}
-      {isMobile && <div className="h-16"></div>}
     </div>
   );
 }

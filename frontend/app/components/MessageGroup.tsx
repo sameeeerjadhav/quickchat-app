@@ -112,7 +112,7 @@ export default function MessageGroup({
       
       {/* Telegram-style date separator */}
       <div className={`${isSticky ? 'fixed top-16 left-1/2 transform -translate-x-1/2 z-20' : 'relative'} flex justify-center mb-1 transition-all duration-200`}>
-        <div className={`${isSticky ? 'shadow-lg animate-pulse-slow' : ''} bg-gray-300/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full px-4 py-1.5 border border-gray-300/50 dark:border-gray-700/50`}>
+        <div className={`${isSticky ? 'shadow-lg animate-pulse-slow' : ''} bg-gray-300/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full px-4 py-1.5 border border-gray-300/50 dark:border-zinc-700/50`}>
           <span className="text-[12px] font-semibold text-gray-700 dark:text-gray-300">
             {formatDate(date)}
           </span>

@@ -19,6 +19,23 @@ const messageSchema = new mongoose.Schema({
   image: {
     type: String
   },
+  // Media/File fields
+  fileUrl: {
+    type: String
+  },
+  fileType: {
+    type: String,
+    enum: ['image', 'video', 'audio', 'file', null]
+  },
+  fileName: {
+    type: String
+  },
+  fileSize: {
+    type: Number
+  },
+  duration: {
+    type: Number  // For voice messages - duration in seconds
+  },
   isRead: {
     type: Boolean,
     default: false

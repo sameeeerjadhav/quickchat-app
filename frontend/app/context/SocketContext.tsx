@@ -9,14 +9,15 @@ interface SocketContextType {
   isConnected: boolean;
   connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'error';
   reconnectAttempts: number;
+  connect: () => void; // New method
+  disconnect: () => void; // New method
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, connect, disconnect, reconnectAttempts } = useSocket();
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('disconnected');
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   // Monitor connection status changes
   useEffect(() => {
@@ -28,7 +29,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const handleConnect = () => {
       console.log('🟢 Socket connected');
       setConnectionStatus('connected');
-      setReconnectAttempts(0);
     };
 
     const handleDisconnect = () => {
@@ -41,16 +41,14 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setConnectionStatus('error');
     };
 
-    const handleReconnecting = (attempt: number) => {
-      console.log(`🔄 Reconnecting (attempt ${attempt})`);
+    const handleReconnecting = () => {
+      console.log('🔄 Reconnecting...');
       setConnectionStatus('connecting');
-      setReconnectAttempts(attempt);
     };
 
     const handleReconnect = () => {
       console.log('✅ Socket reconnected');
       setConnectionStatus('connected');
-      setReconnectAttempts(0);
     };
 
     socket.on('connect', handleConnect);
@@ -78,58 +76,38 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && socket && !socket.connected) {
-        console.log('📱 App became visible, checking socket connection...');
-        socket.connect();
+      if (document.visibilityState === 'visible') {
+        // Use exposed connect method to ensure check
+        connect();
       }
     };
 
-    // Handle mobile app going to background/foreground
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [socket]);
-
-  // Auto-reconnect less frequently on mobile to save battery
-  useEffect(() => {
-    if (typeof window === 'undefined' || !socket) return;
-
-    const isMobile = window.innerWidth < 768;
-    
-    if (isMobile) {
-      // On mobile, use less aggressive reconnection for battery saving
-      socket.io.opts.reconnectionDelayMax = 10000; // 10 seconds max delay
-      socket.io.opts.reconnectionAttempts = 5; // Fewer attempts
-    } else {
-      // On desktop, more aggressive reconnection
-      socket.io.opts.reconnectionDelayMax = 5000; // 5 seconds max delay
-      socket.io.opts.reconnectionAttempts = 10; // More attempts
-    }
-  }, [socket]);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [connect]);
 
   const value: SocketContextType = {
     socket,
     isConnected,
     connectionStatus,
     reconnectAttempts,
+    connect,
+    disconnect
   };
 
   return (
     <SocketContext.Provider value={value}>
       {children}
-      
+
       {/* Optional: Connection status indicator for debugging */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-4 right-4 z-50 hidden md:block">
-          <div className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-            connectionStatus === 'connected' 
-              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+          <div className={`px-3 py-1.5 rounded-full text-xs font-medium border ${connectionStatus === 'connected'
+              ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
               : connectionStatus === 'connecting'
-              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-          }`}>
+                ? 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
+                : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
+            }`}>
             Socket: {connectionStatus}
             {reconnectAttempts > 0 && ` (${reconnectAttempts})`}
           </div>

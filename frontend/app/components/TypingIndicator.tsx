@@ -31,7 +31,7 @@ export default function TypingIndicator({
     return `${baseClass} ${
       isActive 
         ? 'bg-blue-500 dark:bg-blue-400 scale-125' 
-        : 'bg-gray-400 dark:bg-gray-500'
+        : 'bg-gray-400 dark:bg-zinc-600'
     }`;
   };
 
@@ -40,7 +40,7 @@ export default function TypingIndicator({
       isMobile ? 'gap-1.5 px-3 py-1.5' : 'gap-2 px-4 py-2'
     } animate-pulse`}>
       {showAvatar && (
-        <div className={`rounded-full bg-gray-200 dark:bg-gray-700 ${
+        <div className={`rounded-full bg-gray-200 dark:bg-zinc-800 ${
           isMobile ? 'h-6 w-6' : 'h-8 w-8'
         } flex-shrink-0`}></div>
       )}
@@ -48,7 +48,7 @@ export default function TypingIndicator({
       {/* Message bubble container */}
       <div className={`flex items-center ${
         isMobile ? 'gap-1.5 px-3 py-2' : 'gap-2 px-4 py-2.5'
-      } bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm`}>
+      } bg-gray-100 dark:bg-zinc-900 rounded-2xl rounded-tl-sm`}>
         {/* Animated dots */}
         <div className="flex items-center gap-1">
           <div className={getDotClass(0)}></div>

@@ -5,6 +5,8 @@ import { useSocketContext } from '../context/SocketContext';
 import { FiPaperclip, FiMic, FiImage, FiSmile, FiSend, FiX, FiFile, FiVideo, FiMusic } from 'react-icons/fi';
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
+import VoiceRecorder from './VoiceRecorder';
+import { AnimatePresence } from 'framer-motion';
 
 interface MessageInputProps {
   value: string;
@@ -17,15 +19,15 @@ interface MessageInputProps {
   onMessageSent?: () => void;
 }
 
-export default function MessageInput({ 
-  value, 
-  onChange, 
-  onSend, 
+export default function MessageInput({
+  value,
+  onChange,
+  onSend,
   disabled = false,
   receiverId,
   currentUserId,
   onFileSelect,
-  onMessageSent 
+  onMessageSent
 }: MessageInputProps) {
   const { socket } = useSocketContext();
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -34,13 +36,14 @@ export default function MessageInput({
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const [showMediaMenu, setShowMediaMenu] = useState(false);
-  
+
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
@@ -78,22 +81,22 @@ export default function MessageInput({
       });
       return;
     }
-    
+
     socket.emit('typing', { receiverId, isTyping });
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     onChange(newValue);
-    
+
     if (newValue.trim() && !typingTimeoutRef.current) {
       handleTyping(true);
     }
-    
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
+
     typingTimeoutRef.current = setTimeout(() => {
       if (newValue.trim()) {
         handleTyping(false);
@@ -136,7 +139,7 @@ export default function MessageInput({
       formData.append('receiverId', receiverId);
       formData.append('senderId', currentUserId);
       formData.append('fileType', detectedFileType);
-      
+
       if (value.trim()) {
         formData.append('text', value);
         onChange(''); // Clear input
@@ -191,7 +194,7 @@ export default function MessageInput({
       }
 
       const data = await response.json();
-      
+
       clearInterval(progressInterval);
       setUploadProgress(100);
 
@@ -199,11 +202,11 @@ export default function MessageInput({
         setIsUploading(false);
         setSelectedFileName(null);
         setUploadProgress(0);
-        
+
         if (onMessageSent) {
           onMessageSent();
         }
-        
+
         console.log('✅ File uploaded successfully:', data);
       }, 500);
 
@@ -212,7 +215,7 @@ export default function MessageInput({
       setIsUploading(false);
       setSelectedFileName(null);
       setUploadProgress(0);
-      
+
       // Show error to user
       alert(`Failed to upload file: ${error.message || 'Unknown error'}`);
     }
@@ -222,7 +225,7 @@ export default function MessageInput({
     if (onFileSelect) {
       onFileSelect(file);
     }
-    
+
     uploadFile(file, type);
     setShowMediaMenu(false);
   };
@@ -248,6 +251,71 @@ export default function MessageInput({
     e.target.value = '';
   };
 
+  const toggleMediaMenu = () => setShowMediaMenu(!showMediaMenu);
+
+  // Voice Recording Handlers
+  const handleVoiceRecordStart = () => {
+    setShowVoiceRecorder(true);
+    setShowMediaMenu(false);
+  };
+
+  const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
+    if (!receiverId || !currentUserId || !socket) {
+      console.error('Cannot send voice message: Missing required data');
+      return;
+    }
+
+    setShowVoiceRecorder(false);
+    setIsUploading(true);
+    setUploadProgress(0);
+    setSelectedFileName('Voice message');
+
+    try {
+      const file = new File([audioBlob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('receiverId', receiverId);
+      formData.append('senderId', currentUserId);
+      formData.append('fileType', 'audio');
+      formData.append('duration', duration.toString());
+
+      const response = await fetch('http://localhost:8080/api/messages/send-file', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const data = await response.json();
+      console.log('✅ Voice message uploaded:', data);
+
+      setUploadProgress(100);
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        setSelectedFileName(null);
+      }, 500);
+
+      if (onMessageSent) {
+        onMessageSent();
+      }
+    } catch (error: any) {
+      console.error('❌ Voice upload failed:', error);
+      alert('Failed to send voice message. Please try again.');
+      setIsUploading(false);
+      setUploadProgress(0);
+      setSelectedFileName(null);
+    }
+  };
+
+  const handleVoiceCancel = () => {
+    setShowVoiceRecorder(false);
+  };
+
   // ======================
   // VOICE MESSAGE RECORDING
   // ======================
@@ -255,22 +323,22 @@ export default function MessageInput({
   const startRecording = () => {
     setIsRecording(true);
     setRecordingTime(0);
-    
+
     recordingIntervalRef.current = setInterval(() => {
       setRecordingTime(prev => prev + 1);
     }, 1000);
-    
+
     console.log('🎤 Starting voice recording...');
   };
 
   const stopRecording = () => {
     setIsRecording(false);
-    
+
     if (recordingIntervalRef.current) {
       clearInterval(recordingIntervalRef.current);
       recordingIntervalRef.current = null;
     }
-    
+
     if (recordingTime > 1) {
       console.log(`🎤 Recording stopped after ${recordingTime} seconds`);
       if (receiverId && currentUserId && socket) {
@@ -287,7 +355,7 @@ export default function MessageInput({
         });
       }
     }
-    
+
     setRecordingTime(0);
   };
 
@@ -310,12 +378,12 @@ export default function MessageInput({
     if (value.trim()) {
       handleTyping(false);
       onSend();
-      
+
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      
+
       if (onMessageSent) {
         onMessageSent();
       }
@@ -368,26 +436,25 @@ export default function MessageInput({
     <div className="relative">
       {/* Emoji Picker - Responsive positioning */}
       {showEmojiPicker && (
-        <div 
+        <div
           ref={emojiPickerRef}
-          className={`absolute z-50 shadow-xl rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 ${
-            emojiPickerPosition === 'top' 
-              ? 'bottom-full right-0 mb-2 max-h-[350px] overflow-y-auto' 
-              : 'top-full right-0 mt-2 max-h-[300px] overflow-y-auto'
-          }`}
+          className={`absolute z-50 shadow-xl rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 ${emojiPickerPosition === 'top'
+            ? 'bottom-full right-0 mb-2 max-h-[350px] overflow-y-auto'
+            : 'top-full right-0 mt-2 max-h-[300px] overflow-y-auto'
+            }`}
         >
-          <div className="bg-white dark:bg-gray-800 p-2">
-            <div className="flex justify-between items-center mb-2 px-2 sticky top-0 bg-white dark:bg-gray-800 z-10 py-1">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Emoji</h3>
+          <div className="bg-white dark:bg-slate-800 p-2">
+            <div className="flex justify-between items-center mb-2 px-2 sticky top-0 bg-white dark:bg-slate-800 z-10 py-1">
+              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">Emoji</h3>
               <button
                 onClick={() => setShowEmojiPicker(false)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded touch-target"
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded touch-target"
                 aria-label="Close emoji picker"
               >
-                <FiX className="h-4 w-4 text-gray-500" />
+                <FiX className="h-4 w-4 text-slate-500" />
               </button>
             </div>
-            <div className="max-h-[280px] overflow-y-auto">
+            <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
               <Picker
                 data={data}
                 onEmojiSelect={handleEmojiSelect}
@@ -402,7 +469,7 @@ export default function MessageInput({
           </div>
         </div>
       )}
-      
+
       {/* Hidden file inputs */}
       <input
         type="file"
@@ -432,8 +499,8 @@ export default function MessageInput({
         className="hidden"
         accept="audio/*"
       />
-      
-      <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-900 px-3 sm:px-4 py-3 border-t border-gray-200 dark:border-gray-800">
+
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-black px-3 sm:px-4 py-3 border-t border-slate-200 dark:border-slate-800">
         {isUploading && (
           <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <div className="flex items-center justify-between mb-1">
@@ -448,37 +515,36 @@ export default function MessageInput({
               </span>
             </div>
             <div className="h-1.5 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-blue-500 rounded-full transition-all duration-300"
                 style={{ width: `${uploadProgress}%` }}
               ></div>
             </div>
           </div>
         )}
-        
+
         <div className="flex items-center gap-1 sm:gap-2">
           {/* Media Attachment Button - Mobile friendly */}
           <div className="relative media-menu">
             <button
               type="button"
-              onClick={() => setShowMediaMenu(!showMediaMenu)}
+              onClick={toggleMediaMenu}
               disabled={disabled || isUploading}
-              className="p-2 sm:p-2.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors disabled:opacity-50 touch-target"
+              className="p-2 sm:p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors disabled:opacity-50 touch-target"
               aria-label="Attach file"
             >
               <FiPaperclip className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
-            
+
             {/* Media Menu - Responsive positioning */}
             {showMediaMenu && (
-              <div className={`absolute ${
-                emojiPickerPosition === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
-              } left-0 z-40 min-w-[160px] sm:min-w-[180px]`}>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1">
+              <div className={`absolute ${emojiPickerPosition === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+                } left-0 z-40 min-w-[160px] sm:min-w-[180px]`}>
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-1">
                   <button
                     type="button"
                     onClick={() => handleFileClick('image')}
-                    className="w-full px-3 sm:px-4 py-2.5 text-left text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:gap-3 touch-target"
+                    className="w-full px-3 sm:px-4 py-2.5 text-left text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 sm:gap-3 touch-target"
                   >
                     <FiImage className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">Photo & Video</span>
@@ -486,7 +552,7 @@ export default function MessageInput({
                   <button
                     type="button"
                     onClick={() => handleFileClick('all')}
-                    className="w-full px-3 sm:px-4 py-2.5 text-left text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:gap-3 touch-target"
+                    className="w-full px-3 sm:px-4 py-2.5 text-left text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 sm:gap-3 touch-target"
                   >
                     <FiFile className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">Document</span>
@@ -494,7 +560,7 @@ export default function MessageInput({
                   <button
                     type="button"
                     onClick={() => handleFileClick('audio')}
-                    className="w-full px-3 sm:px-4 py-2.5 text-left text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:gap-3 touch-target"
+                    className="w-full px-3 sm:px-4 py-2.5 text-left text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 sm:gap-3 touch-target"
                   >
                     <FiMusic className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">Audio File</span>
@@ -503,7 +569,7 @@ export default function MessageInput({
               </div>
             )}
           </div>
-          
+
           {/* Message Input Field */}
           <div className="flex-1 relative min-w-0">
             <input
@@ -513,28 +579,28 @@ export default function MessageInput({
               onKeyDown={handleKeyDown}
               placeholder="Message..."
               disabled={disabled || isUploading}
-              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-4 pr-10 sm:pr-12 bg-gray-100 dark:bg-gray-800 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50 text-sm sm:text-[15px] touch-target"
+              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-4 pr-10 sm:pr-12 bg-slate-100 dark:bg-slate-800 rounded-xl border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 disabled:opacity-50 text-sm sm:text-[15px] touch-target transition-all"
               autoFocus
             />
-            
+
             {/* Emoji Button */}
             <button
               type="button"
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               disabled={disabled || isUploading}
-              className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 rounded-full transition-colors touch-target"
+              className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 rounded-full transition-colors touch-target"
               aria-label="Select emoji"
             >
               <FiSmile className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
-          
+
           {/* Send/Record Button */}
           {value.trim() ? (
             <button
               type="submit"
               disabled={!value.trim() || disabled || isUploading}
-              className="p-2.5 sm:p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors active:scale-95 touch-target"
+              className="p-2.5 sm:p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 touch-target shadow-md shadow-blue-500/20"
               aria-label="Send message"
             >
               <FiSend className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -542,42 +608,41 @@ export default function MessageInput({
           ) : (
             <button
               type="button"
-              onClick={handleRecordingToggle}
+              onClick={handleVoiceRecordStart}
               disabled={disabled || isUploading}
-              className={`p-2.5 sm:p-3 rounded-full transition-all duration-200 touch-target ${
-                isRecording 
-                  ? 'bg-red-500 text-white animate-pulse' 
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`p-2.5 sm:p-3 rounded-xl transition-all duration-200 touch-target ${isRecording
+                ? 'bg-rose-500 text-white animate-pulse'
+                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
               aria-label={isRecording ? "Stop recording" : "Start recording"}
             >
               <FiMic className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           )}
         </div>
-        
+
         {/* Recording Indicator */}
         {isRecording && (
-          <div className="mt-2 px-3 sm:px-4 py-2 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-between">
+          <div className="mt-2 px-3 sm:px-4 py-2 bg-rose-50 dark:bg-rose-900/20 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-red-500 animate-pulse flex-shrink-0"></div>
-              <span className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium truncate">
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-rose-500 animate-pulse flex-shrink-0"></div>
+              <span className="text-xs sm:text-sm text-rose-600 dark:text-rose-400 font-medium truncate">
                 Recording... {formatTime(recordingTime)}
               </span>
             </div>
             <button
               onClick={stopRecording}
-              className="text-xs sm:text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium flex-shrink-0 ml-2 touch-target"
+              className="text-xs sm:text-sm text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium flex-shrink-0 ml-2 touch-target"
             >
               Send
             </button>
           </div>
         )}
-        
+
         {/* Keyboard Shortcuts Help */}
         <div className="flex items-center justify-between mt-2 px-1 flex-wrap gap-1">
           <div className="flex items-center gap-1">
-            <span className="text-[10px] xs:text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-[10px] xs:text-xs text-slate-500 dark:text-slate-400">
               Press Enter to send • Shift+Enter for new line
             </span>
           </div>
@@ -599,6 +664,16 @@ export default function MessageInput({
           </div>
         </div>
       </form>
+
+      {/* Voice Recorder */}
+      <AnimatePresence>
+        {showVoiceRecorder && (
+          <VoiceRecorder
+            onSend={handleVoiceSend}
+            onCancel={handleVoiceCancel}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
