@@ -1,7 +1,3 @@
-No, it's not necessary! Here's a **concise, professional README.md** that's perfect for GitHub:
-
----
-
 # 💬 QuickChat - Real-Time Chat App
 
 ![Next.js](https://img.shields.io/badge/Next.js-14-black)
